@@ -5,7 +5,7 @@ __pycache__/
 *.pyd
 .Python
 
-# Generated protobuf files
+# Generated protobuf files (regenerados por el Dockerfile o con protoc)
 *_pb2.py
 *_pb2_grpc.py
 
