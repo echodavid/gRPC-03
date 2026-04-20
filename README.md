@@ -62,34 +62,57 @@ practica-03/
 ## Requisitos
 
 - Python 3.9+
-- `pip install grpcio grpcio-tools flask`
-
-O Docker (no requiere dependencias locales).
+- pip3
 
 ---
 
-## Ejecución local
+## Instalación y ejecución local (paso a paso)
 
-### 1. Generar archivos protobuf (solo si se modifica el `.proto`)
+### 1. Clonar el repositorio
 
 ```bash
-cd practica-03
+git clone https://github.com/echodavid/gRCP-03.git
+cd gRCP-03
+```
+
+### 2. Instalar dependencias Python
+
+```bash
+pip3 install grpcio grpcio-tools flask
+```
+
+### 3. Compilar el archivo `.proto` (genera los archivos `_pb2.py`)
+
+> Los archivos generados no se incluyen en el repositorio. **Este paso es obligatorio** antes de ejecutar cualquier cosa.
+
+```bash
 python3 -m grpc_tools.protoc \
   --proto_path=proto \
-  --python_out=server --grpc_python_out=server \
+  --python_out=server \
+  --grpc_python_out=server \
   proto/memory.proto
 
 python3 -m grpc_tools.protoc \
   --proto_path=proto \
-  --python_out=client --grpc_python_out=client \
+  --python_out=client \
+  --grpc_python_out=client \
   proto/memory.proto
 ```
 
-### 2. Servidor gRPC
+Esto genera en `server/` y `client/`:
+- `memory_pb2.py` — clases de mensajes
+- `memory_pb2_grpc.py` — stubs y servicers gRPC
+
+### 4. Iniciar el servidor gRPC
 
 ```bash
-cd practica-03
 python3 server/memory_server.py
+```
+
+Salida esperada:
+```
+[SERVER] HH:MM:SS SQLite abierto → …/data/ranking.db
+[SERVER] HH:MM:SS Servidor escuchando en :50054 (3 rondas por sala)
 ```
 
 Variables de entorno opcionales:
@@ -101,19 +124,19 @@ Variables de entorno opcionales:
 | `MAX_ROUNDS` | `3` | Rondas por sala |
 | `DATA_DIR` | `../data` | Directorio para `ranking.db` |
 
-### 3. Cliente web
+### 5. Iniciar el cliente web
+
+Abre otra terminal:
 
 ```bash
-cd practica-03
 WEB_PORT=8081 python3 web_client/app.py
 ```
 
-Abrir **http://localhost:8081** en tantos navegadores/pestañas como jugadores.
+Luego abre **http://localhost:8081** en el navegador (una pestaña por jugador).
 
-### 4. Cliente de consola (alternativo)
+### 6. Cliente de consola (alternativo al web)
 
 ```bash
-cd practica-03
 python3 client/memory_client.py
 ```
 
