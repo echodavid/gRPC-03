@@ -1,0 +1,67 @@
+networks:
+  game_net:
+    driver: bridge
+
+services:
+  server:
+    build: .
+    ports:
+      - "50054:50054"
+    environment:
+      - BOARD_SIZE=4
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    networks:
+      - game_net
+    command: python server/memory_server.py
+
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_HOST=server
+      - WEB_PORT=8080
+    depends_on:
+      - server
+    networks:
+      - game_net
+    command: python web_client/app.py
+
+  # Clientes interactivos: ejecutar con docker compose run --rm player1
+  player1:
+    build: .
+    environment:
+      - SERVER_HOST=server
+    depends_on:
+      - server
+    networks:
+      - game_net
+    stdin_open: true
+    tty: true
+    command: python client/memory_client.py
+
+  player2:
+    build: .
+    environment:
+      - SERVER_HOST=server
+    depends_on:
+      - server
+    networks:
+      - game_net
+    stdin_open: true
+    tty: true
+    command: python client/memory_client.py
+
+  player3:
+    build: .
+    environment:
+      - SERVER_HOST=server
+    depends_on:
+      - server
+    networks:
+      - game_net
+    stdin_open: true
+    tty: true
+    command: python client/memory_client.py

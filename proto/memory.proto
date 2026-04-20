@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package memory;
+
+service MemoryGame {
+  // Unirse a una sala (room_id vacío o "random" = matchmaking)
+  rpc JoinGame (PlayerRequest) returns (PlayerResponse);
+
+  // Voltear la primera carta (opcional, pre-revela símbolo para todos)
+  rpc SelectCard (SelectRequest) returns (SelectReply);
+
+  // Realizar una jugada (voltear dos cartas)
+  rpc PlayTurn (MoveRequest) returns (MoveReply);
+
+  // Suscribirse a actualizaciones en tiempo real de una sala
+  rpc SubscribeToUpdates (SubscribeRequest) returns (stream GameState);
+
+  // Obtener estadísticas de una sala
+  rpc GetStatistics (StatsRequest) returns (StatsResponse);
+
+  // Listar salas activas
+  rpc ListRooms (Empty) returns (RoomListResponse);
+
+  // Ranking global (all-time, from SQLite)
+  rpc GetRanking (Empty) returns (RankingResponse);
+}
+
+message PlayerRequest {
+  string name = 1;
+  string room_id = 2; // "" o "random" = matchmaking; cualquier otro = sala nombrada
+}
+
+message PlayerResponse {
+  string player_id = 1;
+  int32 board_size = 2;
+  string room_id = 3;
+}
+
+message SubscribeRequest {
+  string player_id = 1;
+  string room_id = 2;
+}
+
+message StatsRequest {
+  string room_id = 1;
+}
+
+message RoomInfo {
+  string room_id = 1;
+  string status = 2;
+  int32 player_count = 3;
+}
+
+message RoomListResponse {
+  repeated RoomInfo rooms = 1;
+}
+
+message SelectRequest {
+  string player_id = 1;
+  int32 r = 2;
+  int32 c = 3;
+}
+
+message SelectReply {
+  bool valid = 1;
+  string message = 2;
+}
+
+message MoveRequest {
+  string player_id = 1;
+  int32 r1 = 2;
+  int32 c1 = 3;
+  int32 r2 = 4;
+  int32 c2 = 5;
+}
+
+message MoveReply {
+  bool valid = 1;
+  string message = 2;
+  bool match = 3;
+}
+
+message Card {
+  int32 r = 1;
+  int32 c = 2;
+  string symbol = 3;
+  bool flipped = 4;
+  bool matched = 5;
+}
+
+message GameState {
+  repeated Card board = 1;
+  string current_player_id = 2;
+  string current_player_name = 3;
+  string status = 4; // "WAITING", "PLAYING", "FINISHED"
+  map<string, int32> scores = 5;
+  string room_id = 6;
+  int32 round = 7;       // current round number (1-based)
+  int32 max_rounds = 8;  // total rounds in this room
+}
+
+message PlayerStats {
+  string name = 1;
+  int32 score = 2;
+  int32 total_moves = 3;
+  float avg_response_time = 4;
+}
+
+message StatsResponse {
+  repeated PlayerStats rankings = 1;
+}
+
+message RankingEntry {
+  string player_name = 1;
+  int32  total_score = 2;
+  int32  rounds_played = 3;
+  int32  total_moves = 4;
+  float  avg_response_time = 5;
+}
+
+message RankingResponse {
+  repeated RankingEntry entries = 1;
+}
+
+message Empty {}
