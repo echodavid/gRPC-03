@@ -315,6 +315,7 @@
       margin-top: 0.7rem;
     }
     .pill-WAITING  { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+    .pill-LOBBY    { background: rgba(99,102,241,0.15);  color: #818cf8;       border: 1px solid rgba(99,102,241,0.3); }
     .pill-PLAYING  { background: rgba(74,222,128,0.12); color: var(--green);  border: 1px solid rgba(74,222,128,0.3); }
     .pill-FINISHED { background: rgba(167,139,250,0.15); color: #c4b5fd;      border: 1px solid rgba(167,139,250,0.3); }
 
@@ -486,6 +487,130 @@
     .results-table tr.silver td { color: #cbd5e1; }
     .results-table tr.bronze td { color: #cd7c4a; }
 
+    /* ═══════════════════════ HC SPINNERS ══════════════════ */
+    .hc-spinner-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .hc-spinner-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 1.3px;
+      color: var(--muted);
+    }
+    .hc-spinner {
+      display: flex;
+      align-items: center;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(124,77,255,0.3);
+      border-radius: 12px;
+      overflow: hidden;
+      height: 48px;
+    }
+    .hc-spinner:focus-within {
+      border-color: rgba(124,77,255,0.7);
+      box-shadow: 0 0 0 3px rgba(124,77,255,0.15);
+    }
+    .hc-spin-btn {
+      width: 44px;
+      height: 100%;
+      background: rgba(124,77,255,0.1);
+      border: none;
+      color: #a78bfa;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .hc-spin-btn:hover  { background: rgba(124,77,255,0.25); }
+    .hc-spin-btn:active { background: rgba(124,77,255,0.4); }
+    .hc-spin-val {
+      flex: 1;
+      text-align: center;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 0;
+      min-width: 0;
+    }
+    .hc-spin-unit {
+      font-size: 0.68rem;
+      color: var(--muted);
+      padding-right: 0.6rem;
+      white-space: nowrap;
+    }
+
+    /* ═══════════════════════ HC SPINNERS ══════════════════ */
+    .hc-spinner-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .hc-spinner-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 1.3px;
+      color: var(--muted);
+    }
+    .hc-spinner {
+      display: flex;
+      align-items: center;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(124,77,255,0.3);
+      border-radius: 12px;
+      overflow: hidden;
+      height: 48px;
+    }
+    .hc-spinner:focus-within {
+      border-color: rgba(124,77,255,0.7);
+      box-shadow: 0 0 0 3px rgba(124,77,255,0.15);
+    }
+    .hc-spin-btn {
+      width: 44px;
+      height: 100%;
+      background: rgba(124,77,255,0.1);
+      border: none;
+      color: #a78bfa;
+      font-size: 1.25rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .hc-spin-btn:hover  { background: rgba(124,77,255,0.25); }
+    .hc-spin-btn:active { background: rgba(124,77,255,0.4); }
+    .hc-spin-val {
+      flex: 1;
+      text-align: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 0;
+      min-width: 0;
+      /* hide browser number arrows */
+      -moz-appearance: textfield;
+    }
+    .hc-spin-val::-webkit-inner-spin-button,
+    .hc-spin-val::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+    /* ═══════════════════════ HOST CONFIG SIZE BTNS (legacy keepfor backcompat) ═ */
+    .hc-size-btn { display:none; }
+
     /* ═══════════════════════ TOAST ═══════════════════════ */
     #toast {
       position: fixed;
@@ -518,6 +643,8 @@
 <!-- ════════════════════════════════════════
      CONFIG SCREEN
 ════════════════════════════════════════ -->
+
+<!-- host-config-overlay removed — config now lives inside .board-wrap -->
 <div id="config-screen">
   <div class="config-card">
     <div class="config-logo">🧠</div>
@@ -643,6 +770,82 @@
 
     <!-- Board + hint -->
     <div class="board-wrap">
+
+      <!-- Host config panel (shown inside the board area when isHost && LOBBY) -->
+      <div id="host-config-panel" style="display:none; width:100%; max-width:520px;
+           background:linear-gradient(135deg,#1a1740 0%,#221e52 100%);
+           border:1px solid rgba(167,139,250,0.25); border-radius:20px;
+           padding:2rem 2rem 1.7rem; box-shadow:0 24px 60px rgba(0,0,0,0.5)">
+
+        <!-- Header row -->
+        <div style="display:flex; align-items:center; gap:0.9rem; margin-bottom:1.5rem">
+          <div style="font-size:2rem; line-height:1">🎛️</div>
+          <div>
+            <div style="font-size:1.15rem; font-weight:700; color:var(--text)">Configura la partida</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:0.15rem">
+              Eres el <span style="color:#a78bfa; font-weight:600">host</span>
+              &nbsp;·&nbsp; Sala:&nbsp;<code id="hc-room-id" style="color:#c4b5fd; font-size:0.78rem">—</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Board size + players + rounds spinners -->
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.3rem">
+
+          <!-- Board size -->
+          <div class="hc-spinner-group">
+            <span class="hc-spinner-label">Tablero</span>
+            <div class="hc-spinner">
+              <button class="hc-spin-btn" onclick="hcStep('hc-size-inp',-2)">−</button>
+              <input class="hc-spin-val" id="hc-size-inp" type="number"
+                     min="2" max="10" step="2" value="4" readonly>
+              <button class="hc-spin-btn" onclick="hcStep('hc-size-inp',2)">+</button>
+            </div>
+            <span id="hc-pairs-hint"
+                  style="font-size:0.65rem; color:var(--muted); text-align:center">8 pares</span>
+          </div>
+
+          <!-- Players -->
+          <div class="hc-spinner-group">
+            <span class="hc-spinner-label">Jugadores</span>
+            <div class="hc-spinner">
+              <button class="hc-spin-btn" onclick="hcStep('hc-players',-1)">−</button>
+              <input class="hc-spin-val" id="hc-players" type="number"
+                     min="2" max="8" step="1" value="2" readonly>
+              <button class="hc-spin-btn" onclick="hcStep('hc-players',1)">+</button>
+            </div>
+          </div>
+
+          <!-- Rounds -->
+          <div class="hc-spinner-group">
+            <span class="hc-spinner-label">Rondas</span>
+            <div class="hc-spinner">
+              <button class="hc-spin-btn" onclick="hcStep('hc-rounds',-1)">−</button>
+              <input class="hc-spin-val" id="hc-rounds" type="number"
+                     min="1" max="10" step="1" value="3" readonly>
+              <button class="hc-spin-btn" onclick="hcStep('hc-rounds',1)">+</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Player counter -->
+
+        <div id="hc-waiting" style="display:flex; align-items:center; gap:0.55rem;
+             background:rgba(255,255,255,0.04); border-radius:10px;
+             padding:0.6rem 0.9rem; margin-bottom:1.1rem">
+          <div class="dot-live"></div>
+          <span style="font-size:0.8rem; color:var(--muted)">1 jugador conectado (tú)</span>
+        </div>
+
+        <!-- Launch button -->
+        <button class="btn btn-primary btn-block" onclick="configureGame()"
+                style="font-size:0.95rem; letter-spacing:0.5px">
+          🚀 Lanzar partida
+        </button>
+        <p id="hc-status" class="status-msg"></p>
+      </div>
+
       <div id="board"></div>
       <p class="board-hint" id="board-hint">Conectando al servidor…</p>
     </div>
@@ -712,7 +915,28 @@ const S = {
   board:        [],
   es:           null,
   roomMode:     'random',   // 'random' | 'named'
+  isHost:       false,
+  maxPlayers:   2,
 };
+
+// ── Host config helpers ───────────────────────────────────────────
+const HC = { size: 4 };
+
+function hcStep(id, delta) {
+  const inp = document.getElementById(id);
+  let v = parseInt(inp.value) + delta;
+  v = Math.max(parseInt(inp.min), Math.min(parseInt(inp.max), v));
+  inp.value = v;
+  // Update pairs hint for board size
+  if (id === 'hc-size-inp') {
+    HC.size = v;
+    const pairs = Math.floor(v * v / 2);
+    const hint = document.getElementById('hc-pairs-hint');
+    if (hint) hint.textContent = pairs + ' pares';
+  }
+}
+
+function setHCSize(n) { /* legacy, unused */ HC.size = n; }
 
 // ── Room mode UI ───────────────────────────────────────────────────
 function setRoomMode(mode) {
@@ -776,10 +1000,29 @@ function joinGame() {
     S.name      = name;
     S.id        = d.player_id;
     S.roomId    = d.room_id;
-    S.boardSize = d.board_size;
+    S.boardSize = d.board_size || 4;
     S.host      = host;
     S.port      = port;
-    startGame();
+    S.isHost    = d.is_host;
+
+    hide('config-screen');
+
+    if (d.is_host) {
+      // Show host config panel inside board-wrap
+      show('game-screen', 'flex');
+      document.getElementById('hc-room-id').textContent = d.room_id;
+      document.getElementById('host-config-panel').style.display = 'flex';
+      document.getElementById('host-config-panel').style.flexDirection = 'column';
+      document.getElementById('board').style.display = 'none';
+      document.getElementById('board-hint').style.display = 'none';
+      document.getElementById('hdr-name').textContent  = name;
+      document.getElementById('hdr-id').textContent    = `(${d.player_id})`;
+      document.getElementById('hdr-room').textContent  = d.room_id;
+      document.getElementById('conn-info').textContent = `${host}:${port}`;
+      startSSEBackground();
+    } else {
+      startGame();
+    }
   })
   .catch(e => cfgStatus('Error: ' + (e.message || 'Sin conexión'), 'error'));
 }
@@ -790,18 +1033,74 @@ function cfgStatus(msg, cls) {
   el.className = 'status-msg ' + (cls || '');
 }
 
+// ── Host SSE background (track joiners while in config overlay) ─────
+function startSSEBackground() {
+  if (S.es) S.es.close();
+  const url = `/api/stream?host=${encodeURIComponent(S.host)}&port=${S.port}`
+            + `&player_id=${encodeURIComponent(S.id)}&room_id=${encodeURIComponent(S.roomId)}`;
+  S.es = new EventSource(url);
+  S.es.onmessage = e => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.error) return;
+      const count = Object.keys(data.scores || {}).length;
+      const el = document.getElementById('hc-waiting');
+      if (el) el.innerHTML = `<div class="dot-live"></div>
+        <span style="font-size:0.8rem; color:var(--muted)">${count} jugador${count !== 1 ? 'es' : ''} conectado${count !== 1 ? 's' : ''} &nbsp;·&nbsp; necesitas <strong style="color:#a78bfa">${data.max_players || '?'}</strong></span>`;
+    } catch(_) {}
+  };
+  S.es.onerror = () => {};
+}
+
+// ── Configure game (host submits settings) ─────────────────────────
+function configureGame() {
+  const boardSize  = parseInt(document.getElementById('hc-size-inp').value);
+  const maxPlayers = parseInt(document.getElementById('hc-players').value);
+  const maxRounds  = parseInt(document.getElementById('hc-rounds').value);
+
+  const statusEl = document.getElementById('hc-status');
+  statusEl.textContent = 'Configurando…';
+  statusEl.className   = 'status-msg info';
+
+  fetch('/api/configure', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      player_id: S.id, host: S.host, port: S.port,
+      board_size: boardSize, max_players: maxPlayers, max_rounds: maxRounds,
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error || !d.valid) throw new Error(d.error || d.message);
+    S.boardSize  = boardSize;
+    S.maxPlayers = maxPlayers;
+    document.getElementById('host-config-panel').style.display = 'none';
+    document.getElementById('board').style.display = '';
+    document.getElementById('board-hint').style.display = '';
+    startGame();
+  })
+  .catch(e => {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.className   = 'status-msg error';
+  });
+}
+
 // ── Game init ──────────────────────────────────────────────────────
 function startGame() {
   show('game-screen', 'flex');
   hide('config-screen');
-
-  document.getElementById('hdr-name').textContent = S.name;
-  document.getElementById('hdr-id').textContent   = `(${S.id})`;
+  document.getElementById('host-config-panel').style.display = 'none';
+  document.getElementById('board').style.display = '';
+  document.getElementById('board-hint').style.display = '';
+  document.getElementById('hdr-name').textContent  = S.name;
+  document.getElementById('hdr-id').textContent    = `(${S.id})`;
   document.getElementById('hdr-room').textContent  = S.roomId;
-  document.getElementById('hdr-round').textContent  = '—';
+  document.getElementById('hdr-round').textContent = '—';
   document.getElementById('conn-info').textContent = `${S.host}:${S.port}`;
 
-  const size = S.boardSize;
+  const size   = S.boardSize || 4;
+  S.boardSize  = size;
   const cardPx = size <= 4 ? 88 : size <= 6 ? 72 : 56;
   document.documentElement.style.setProperty('--card-size', cardPx + 'px');
 
@@ -815,11 +1114,15 @@ function startGame() {
 function backToConfig() {
   if (S.es) { S.es.close(); S.es = null; }
   hide('game-screen');
+  document.getElementById('host-config-panel').style.display = 'none';
+  document.getElementById('board').style.display = '';
+  document.getElementById('board-hint').style.display = '';
   show('config-screen', 'flex');
   closeOverlay();
   S.id       = null;
   S.roomId   = '';
   S.selected = null;
+  S.isHost   = false;
   cfgStatus('', '');
 }
 
@@ -857,6 +1160,18 @@ function applyServerState(data) {
   pill.textContent = data.status;
   pill.className   = 'status-pill pill-' + data.status;
 
+  // Handle board size change (host configured the room)
+  if (data.board_size && data.board_size > 0 && data.board_size !== S.boardSize) {
+    S.boardSize = data.board_size;
+    const newSize = data.board_size;
+    const cardPx  = newSize <= 4 ? 88 : newSize <= 6 ? 72 : 56;
+    document.documentElement.style.setProperty('--card-size', cardPx + 'px');
+    S.board = Array.from({length: newSize}, () =>
+      Array.from({length: newSize}, () => ({symbol:'?', flipped:false, matched:false}))
+    );
+    buildBoardDOM();
+  }
+
   // Scores
   const scoresList = document.getElementById('scores-list');
   const scores = data.scores || {};
@@ -875,18 +1190,30 @@ function applyServerState(data) {
   if (data.round && data.max_rounds) {
     document.getElementById('hdr-round').textContent = `R${data.round}/${data.max_rounds}`;
   }
-  if (data.status === 'WAITING') {
-    hint.textContent = '⏳ Esperando más jugadores para iniciar…';
+  // Update player count badge in header during LOBBY/WAITING
+  if (data.max_players) S.maxPlayers = data.max_players;
+  const playerCount = Object.keys(data.scores || {}).length;
+
+  if (data.status === 'LOBBY') {
+    hint.textContent = `⏳ Esperando que el host configure la partida… (${playerCount} conectado${playerCount !== 1 ? 's' : ''})`;
+    document.getElementById('board').style.opacity = '0.25';
+  } else if (data.status === 'WAITING') {
+    hint.textContent = `⏳ Esperando jugadores… (${playerCount}/${data.max_players || '?'})`;
+    document.getElementById('board').style.opacity = '0.25';
   } else if (data.status === 'FINISHED') {
+    document.getElementById('board').style.opacity = '1';
     hint.textContent = '🏆 ¡Juego terminado!';
     setTimeout(openStats, 1200);
   } else if (data.status === 'ROUND_OVER') {
+    document.getElementById('board').style.opacity = '1';
     hint.textContent = `✅ Ronda ${data.round} completada. Siguiente ronda en 3 s…`;
   } else if (S.myTurn) {
+    document.getElementById('board').style.opacity = '1';
     hint.textContent = S.selected
       ? `Carta (${S.selected.r},${S.selected.c}) seleccionada — elige la segunda`
       : '👆 Haz clic en dos cartas para voltearlas';
   } else {
+    document.getElementById('board').style.opacity = '1';
     hint.textContent = `⏳ Turno de ${data.current_player_name}…`;
   }
 }

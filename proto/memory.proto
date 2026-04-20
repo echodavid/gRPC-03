@@ -6,6 +6,9 @@ service MemoryGame {
   // Unirse a una sala (room_id vacío o "random" = matchmaking)
   rpc JoinGame (PlayerRequest) returns (PlayerResponse);
 
+  // El host de la sala configura tablero, jugadores y rondas
+  rpc ConfigureGame (ConfigRequest) returns (ConfigReply);
+
   // Voltear la primera carta (opcional, pre-revela símbolo para todos)
   rpc SelectCard (SelectRequest) returns (SelectReply);
 
@@ -32,8 +35,9 @@ message PlayerRequest {
 
 message PlayerResponse {
   string player_id = 1;
-  int32 board_size = 2;
+  int32  board_size = 2;
   string room_id = 3;
+  bool   is_host = 4;   // true si este jugador es el host de la sala
 }
 
 message SubscribeRequest {
@@ -49,6 +53,7 @@ message RoomInfo {
   string room_id = 1;
   string status = 2;
   int32 player_count = 3;
+  int32 max_players = 4;  // 0 = no configurado aún
 }
 
 message RoomListResponse {
@@ -92,11 +97,27 @@ message GameState {
   repeated Card board = 1;
   string current_player_id = 2;
   string current_player_name = 3;
-  string status = 4; // "WAITING", "PLAYING", "FINISHED"
+  string status = 4; // "LOBBY", "WAITING", "PLAYING", "ROUND_OVER", "FINISHED"
   map<string, int32> scores = 5;
   string room_id = 6;
-  int32 round = 7;       // current round number (1-based)
-  int32 max_rounds = 8;  // total rounds in this room
+  int32 round = 7;        // current round number (1-based)
+  int32 max_rounds = 8;   // total rounds in this room
+  string host_id = 9;     // player_id del host
+  int32 max_players = 10; // jugadores necesarios para empezar
+  int32 board_size = 11;  // tamaño NxN del tablero actual
+}
+
+// ── Configurar sala (solo el host) ───────────────────────────────
+message ConfigRequest {
+  string player_id = 1;
+  int32  board_size = 2;
+  int32  max_players = 3;
+  int32  max_rounds = 4;
+}
+
+message ConfigReply {
+  bool   valid = 1;
+  string message = 2;
 }
 
 message PlayerStats {

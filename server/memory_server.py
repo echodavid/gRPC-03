@@ -5,6 +5,7 @@ import random
 import threading
 import uuid
 import sqlite3
+import json
 import os
 import sys
 
@@ -12,7 +13,7 @@ sys.path.append(os.path.dirname(__file__))
 import memory_pb2
 import memory_pb2_grpc
 
-BOARD_SIZE  = int(os.environ.get("BOARD_SIZE",  4))
+BOARD_SIZE  = int(os.environ.get("BOARD_SIZE",  8))
 MAX_ROUNDS  = int(os.environ.get("MAX_ROUNDS",  3))
 
 EMOJIS = [
@@ -20,6 +21,9 @@ EMOJIS = [
     "🍕","🎈","🚀","🎸","🦒","🍩","🌈","🏝️",
     "🦁","🐸","🌺","🍦","🎃","🦋","🐧","🍄",
     "🎯","🏆","🌙","⭐","🎀","🦄","🐢","🍭",
+    "🏀","🎵","🌊","🦊","🍋","🎪","🚂","🏄",
+    "🌸","🦕","🎭","🍜","🦅","🎨","🌵","🐬",
+    "🎺","🍰","🌻","🚁",
 ]
 
 
@@ -68,13 +72,34 @@ def _db() -> sqlite3.Connection:
                 avg_response_time   REAL    NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS moves (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                round_id          INTEGER NOT NULL REFERENCES rounds(id),
+                move_num          INTEGER NOT NULL,
+                player_name       TEXT    NOT NULL,
+                r1                INTEGER NOT NULL,
+                c1                INTEGER NOT NULL,
+                sym1              TEXT    NOT NULL,
+                r2                INTEGER NOT NULL,
+                c2                INTEGER NOT NULL,
+                sym2              TEXT    NOT NULL,
+                is_match          INTEGER NOT NULL,
+                response_time_s   REAL    NOT NULL,
+                matched_before    INTEGER NOT NULL,
+                board_state_json  TEXT    NOT NULL,
+                scores_json       TEXT    NOT NULL,
+                ts                TEXT    NOT NULL
+            )
+        """)
         conn.commit()
         _DB_CONN = conn
         _log(f"SQLite abierto → {path}")
         return conn
 
 
-def db_save_round(room_id: str, round_num: int, board_size: int, players: dict):
+def db_save_round(room_id: str, round_num: int, board_size: int, players: dict,
+                  move_log: list = None):
     conn = _db()
     ended_at = time.strftime("%Y-%m-%dT%H:%M:%S")
     with _DB_LOCK:
@@ -92,8 +117,26 @@ def db_save_round(room_id: str, round_num: int, board_size: int, players: dict):
                 "VALUES (?,?,?,?,?)",
                 (round_id, d["name"], d["score_this_round"], d["total_moves"], avg),
             )
+        if move_log:
+            conn.executemany(
+                "INSERT INTO moves "
+                "(round_id, move_num, player_name, r1, c1, sym1, r2, c2, sym2, "
+                "is_match, response_time_s, matched_before, board_state_json, scores_json, ts) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                [
+                    (
+                        round_id, m["move_num"], m["player_name"],
+                        m["r1"], m["c1"], m["sym1"],
+                        m["r2"], m["c2"], m["sym2"],
+                        1 if m["is_match"] else 0,
+                        m["response_time_s"], m["matched_before"],
+                        m["board_state_json"], m["scores_json"], m["ts"],
+                    )
+                    for m in move_log
+                ],
+            )
         conn.commit()
-    _log(f"Ronda {round_num} guardada en SQLite (room={room_id})")
+    _log(f"Ronda {round_num} guardada en SQLite — {len(move_log or [])} movs (room={room_id})")
 
 
 def db_get_ranking(limit: int = 20) -> list:
@@ -125,9 +168,14 @@ class GameRoom:
         self.players    = {}         # player_id -> dict
         self.turn_order = []
         self.current_turn_idx = 0
-        self.status     = "WAITING"
+        self.status     = "LOBBY"   # LOBBY hasta que el host configure
         self.processing = False
+        self.host_id    = None      # primer jugador en unirse
+        self.max_players = 2        # configurable por el host
+        self.configured  = False
         self.pending_first = {}    # player_id -> (r, c) first-card selection
+        self._move_log  = []       # list of move dicts for AI training
+        self._move_num  = 0        # sequential move counter within round
         self.lock       = threading.Lock()
         self.cv         = threading.Condition(self.lock)
         self._init_board()
@@ -135,8 +183,12 @@ class GameRoom:
 
     # ── Tablero ────────────────────────────────────────────────────
     def _init_board(self):
-        num_pairs = (self.size * self.size) // 2
-        pool = EMOJIS[:num_pairs] * 2
+        total = self.size * self.size
+        num_pairs = total // 2
+        pairs = [EMOJIS[i % len(EMOJIS)] for i in range(num_pairs)]
+        pool = pairs * 2
+        if total % 2 == 1:          # tablero de tamaño impar → carta comodín extra
+            pool.append("🃏")
         random.shuffle(pool)
         self.board = []
         for r in range(self.size):
@@ -168,6 +220,9 @@ class GameRoom:
             room_id=self.room_id,
             round=self.round,
             max_rounds=self.max_rounds,
+            host_id=self.host_id or "",
+            max_players=self.max_players,
+            board_size=self.size,
         )
 
     # ── Agregar jugador (llamar CON cv) ────────────────────────────
@@ -182,8 +237,10 @@ class GameRoom:
             "turn_started_at": 0,
         }
         self.turn_order.append(p_id)
+        if not self.host_id:
+            self.host_id = p_id   # primer jugador = host
         _log(f"'{name}' ({p_id}) unido. Total: {len(self.players)}", self.room_id)
-        if len(self.players) >= 2 and self.status == "WAITING":
+        if self.configured and len(self.players) >= self.max_players and self.status == "WAITING":
             self._start_next_round()
         self.cv.notify_all()
         return p_id
@@ -194,11 +251,38 @@ class GameRoom:
         self.status = "PLAYING"
         self._init_board()
         self.pending_first.clear()
+        self._move_log = []
+        self._move_num = 0
         for d in self.players.values():
             d["score_this_round"] = 0
         self.current_turn_idx = (self.round - 1) % len(self.turn_order)  # rota quien empieza
         self.players[self.turn_order[self.current_turn_idx]]["turn_started_at"] = time.time()
         _log(f"Ronda {self.round}/{self.max_rounds} iniciada.", self.room_id)
+
+    # ── Configuración por el host ────────────────────────────────────
+    def configure_game(self, p_id: str, board_size: int, max_players: int, max_rounds: int):
+        with self.lock:
+            if self.host_id != p_id:
+                return False, "Solo el host puede configurar la partida."
+            if self.status not in ("LOBBY",):
+                return False, "La sala ya está en curso o ya fue configurada."
+            if not (2 <= board_size <= 10):
+                return False, "Tamaño de tablero debe ser entre 2 y 10."
+            if not (2 <= max_players <= 8):
+                return False, "Número de jugadores debe ser entre 2 y 8."
+            if not (1 <= max_rounds <= 10):
+                return False, "Rondas debe ser entre 1 y 10."
+            self.size        = board_size
+            self.max_players = max_players
+            self.max_rounds  = max_rounds
+            self.configured  = True
+            self.status      = "WAITING"
+            self._init_board()
+            _log(f"Configurada: {board_size}x{board_size}, {max_players} jugadores, {max_rounds} rondas.", self.room_id)
+            if len(self.players) >= self.max_players:
+                self._start_next_round()
+            self.cv.notify_all()
+            return True, "ok"
     # ── Selección de primera carta (pre-volteo) ────────────────────────
     def select_card(self, p_id: str, r: int, c: int):
         """Voltea la primera carta del turno y difunde el símbolo a todos."""
@@ -252,8 +336,18 @@ class GameRoom:
 
             player = self.players[p_id]
             player["total_moves"] += 1
+            rt = time.time() - player["turn_started_at"] if player["turn_started_at"] > 0 else 0.0
             if player["turn_started_at"] > 0:
-                player["response_times"].append(time.time() - player["turn_started_at"])
+                player["response_times"].append(rt)
+
+            # ── Snapshot para entrenamiento de IA (antes de voltear c2) ──
+            matched_before = sum(1 for row in self.board for cell in row if cell["matched"])
+            board_snap = [
+                self.board[rr][cc]["symbol"]
+                if (self.board[rr][cc]["matched"] or self.board[rr][cc]["flipped"])
+                else "?"
+                for rr in range(self.size) for cc in range(self.size)
+            ]
 
             self.processing = True
             c1_obj["flipped"] = True
@@ -261,6 +355,25 @@ class GameRoom:
             self.cv.notify_all()
 
             is_match = c1_obj["symbol"] == c2_obj["symbol"]
+
+            # ── Registrar movimiento ───────────────────────────────────
+            self._move_log.append({
+                "move_num":         self._move_num,
+                "player_name":      player["name"],
+                "r1": r1, "c1": c1, "sym1": c1_obj["symbol"],
+                "r2": r2, "c2": c2, "sym2": c2_obj["symbol"],
+                "is_match":         is_match,
+                "response_time_s":  round(rt, 4),
+                "matched_before":   matched_before,
+                "board_state_json": json.dumps(board_snap, ensure_ascii=False),
+                "scores_json":      json.dumps(
+                    {d["name"]: d["score"] for d in self.players.values()},
+                    ensure_ascii=False,
+                ),
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            })
+            self._move_num += 1
+
             threading.Thread(
                 target=self._delayed_cleanup,
                 args=(is_match, r1, c1, r2, c2, p_id),
@@ -293,9 +406,10 @@ class GameRoom:
                 # Guardar ronda en SQLite (en hilo aparte para no bloquear)
                 rnd = self.round
                 players_snap = {pid: dict(d) for pid, d in self.players.items()}
+                move_log_snap = list(self._move_log)
                 threading.Thread(
                     target=db_save_round,
-                    args=(self.room_id, rnd, self.size, players_snap),
+                    args=(self.room_id, rnd, self.size, players_snap, move_log_snap),
                     daemon=True,
                 ).start()
 
@@ -398,6 +512,7 @@ class MemoryGameServicer(memory_pb2_grpc.MemoryGameServicer):
             player_id=p_id,
             board_size=room.size,
             room_id=room_id,
+            is_host=(p_id == room.host_id),
         )
 
     # ── gRPC: SubscribeToUpdates ───────────────────────────────────
@@ -420,6 +535,19 @@ class MemoryGameServicer(memory_pb2_grpc.MemoryGameServicer):
                 room.cv.wait(timeout=1.0)
                 state = room.get_state_msg()
             yield state
+
+    # ── gRPC: ConfigureGame ────────────────────────────────────
+    def ConfigureGame(self, request, context):
+        with self.mgr_lock:
+            room_id = self.player_room.get(request.player_id)
+            room    = self.rooms.get(room_id) if room_id else None
+        if not room:
+            return memory_pb2.ConfigReply(valid=False, message="Sala no encontrada.")
+        ok, msg = room.configure_game(
+            request.player_id, request.board_size,
+            request.max_players, request.max_rounds,
+        )
+        return memory_pb2.ConfigReply(valid=ok, message=msg)
 
     # ── gRPC: SelectCard ─────────────────────────────────────────
     def SelectCard(self, request, context):
@@ -476,6 +604,7 @@ class MemoryGameServicer(memory_pb2_grpc.MemoryGameServicer):
                 room_id=rid,
                 status=r.status,
                 player_count=len(r.players),
+                max_players=r.max_players,
             )
             for rid, r in snapshot
             if r.status not in ("FINISHED",)
