@@ -53,45 +53,49 @@ def _db() -> sqlite3.Connection:
         path = os.path.join(data_dir, "ranking.db")
         conn = sqlite3.connect(path, check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS rounds (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                room_id     TEXT    NOT NULL,
-                round_num   INTEGER NOT NULL,
-                board_size  INTEGER NOT NULL,
-                ended_at    TEXT    NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS player_results (
-                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                round_id            INTEGER NOT NULL REFERENCES rounds(id),
-                player_name         TEXT    NOT NULL,
-                score               INTEGER NOT NULL,
-                total_moves         INTEGER NOT NULL,
-                avg_response_time   REAL    NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS moves (
-                id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                round_id          INTEGER NOT NULL REFERENCES rounds(id),
-                move_num          INTEGER NOT NULL,
-                player_name       TEXT    NOT NULL,
-                r1                INTEGER NOT NULL,
-                c1                INTEGER NOT NULL,
-                sym1              TEXT    NOT NULL,
-                r2                INTEGER NOT NULL,
-                c2                INTEGER NOT NULL,
-                sym2              TEXT    NOT NULL,
-                is_match          INTEGER NOT NULL,
-                response_time_s   REAL    NOT NULL,
-                matched_before    INTEGER NOT NULL,
-                board_state_json  TEXT    NOT NULL,
-                scores_json       TEXT    NOT NULL,
-                ts                TEXT    NOT NULL
-            )
-        """)
+        # ── rounds: una fila por ronda terminada ──────────────────────────
+        conn.execute("""\n            CREATE TABLE IF NOT EXISTS rounds (\n                id          INTEGER PRIMARY KEY AUTOINCREMENT,\n                id_ses      TEXT    NOT NULL DEFAULT '',\n                room_id     TEXT    NOT NULL DEFAULT '',\n                round_num   INTEGER NOT NULL,\n                tam_tab     INTEGER NOT NULL DEFAULT 0,\n                board_size  INTEGER NOT NULL DEFAULT 0,\n                niv_dif     INTEGER NOT NULL DEFAULT 0,\n                started_at  TEXT    NOT NULL DEFAULT '',\n                ended_at    TEXT    NOT NULL DEFAULT '',\n                t_ron_ms    INTEGER NOT NULL DEFAULT 0\n            )\n        """)
+        # ── player_results: una fila por jugador por ronda ────────────────
+        # Nombres de columnas alineados con la guía de métricas (sección 10)
+        conn.execute("""\n            CREATE TABLE IF NOT EXISTS player_results (\n                id          INTEGER PRIMARY KEY AUTOINCREMENT,\n                id_ron      INTEGER NOT NULL REFERENCES rounds(id),\n                id_ses      TEXT    NOT NULL DEFAULT '',\n                id_jug      TEXT    NOT NULL DEFAULT '',\n                player_name TEXT    NOT NULL DEFAULT '',\n                tot_aci     INTEGER NOT NULL DEFAULT 0,\n                total_moves INTEGER NOT NULL DEFAULT 0,\n                t_resp_ms   INTEGER NOT NULL DEFAULT 0,\n                tot_err     INTEGER NOT NULL DEFAULT 0,\n                tasa_aci    REAL    NOT NULL DEFAULT 0.0,\n                tasa_err    REAL    NOT NULL DEFAULT 0.0,\n                racha_aci   INTEGER NOT NULL DEFAULT 0,\n                racha_err   INTEGER NOT NULL DEFAULT 0,\n                rec_par     REAL    NOT NULL DEFAULT 0.0,\n                tot_ayu     INTEGER NOT NULL DEFAULT 0\n            )\n        """)
+        # ── moves: un registro por jugada (nivel de evento) ───────────────
+        conn.execute("""\n            CREATE TABLE IF NOT EXISTS moves (\n                id               INTEGER PRIMARY KEY AUTOINCREMENT,\n                id_ron           INTEGER NOT NULL REFERENCES rounds(id),\n                id_ses           TEXT    NOT NULL DEFAULT '',\n                id_jug           TEXT    NOT NULL DEFAULT '',\n                player_name      TEXT    NOT NULL DEFAULT '',\n                move_num         INTEGER NOT NULL DEFAULT 0,\n                r1               INTEGER NOT NULL DEFAULT 0,\n                c1               INTEGER NOT NULL DEFAULT 0,\n                sym1             TEXT    NOT NULL DEFAULT '',\n                r2               INTEGER NOT NULL DEFAULT 0,\n                c2               INTEGER NOT NULL DEFAULT 0,\n                sym2             TEXT    NOT NULL DEFAULT '',\n                is_match         INTEGER NOT NULL DEFAULT 0,\n                t_resp_ms        INTEGER NOT NULL DEFAULT 0,\n                matched_before   INTEGER NOT NULL DEFAULT 0,\n                racha_aci        INTEGER NOT NULL DEFAULT 0,\n                racha_err        INTEGER NOT NULL DEFAULT 0,\n                sym1_seen_before INTEGER NOT NULL DEFAULT 0,\n                sym2_seen_before INTEGER NOT NULL DEFAULT 0,\n                tam_tab          INTEGER NOT NULL DEFAULT 0,\n                niv_dif          INTEGER NOT NULL DEFAULT 0,\n                lat_red_ms       REAL    NOT NULL DEFAULT 0.0,\n                board_state_json TEXT    NOT NULL DEFAULT '[]',\n                scores_json      TEXT    NOT NULL DEFAULT '{}',\n                ts               TEXT    NOT NULL DEFAULT ''\n            )\n        """)
+        # ── Migraciones: añadir columnas si no existen (DB preexistente) ──
+        _migrations = [
+            ("rounds",         "id_ses TEXT NOT NULL DEFAULT ''"),
+            ("rounds",         "tam_tab INTEGER NOT NULL DEFAULT 0"),
+            ("rounds",         "niv_dif INTEGER NOT NULL DEFAULT 0"),
+            ("rounds",         "started_at TEXT NOT NULL DEFAULT ''"),
+            ("rounds",         "t_ron_ms INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "id_ron INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "id_ses TEXT NOT NULL DEFAULT ''"),
+            ("player_results", "id_jug TEXT NOT NULL DEFAULT ''"),
+            ("player_results", "tot_aci INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "t_resp_ms INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "tot_err INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "tasa_aci REAL NOT NULL DEFAULT 0.0"),
+            ("player_results", "tasa_err REAL NOT NULL DEFAULT 0.0"),
+            ("player_results", "racha_aci INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "racha_err INTEGER NOT NULL DEFAULT 0"),
+            ("player_results", "rec_par REAL NOT NULL DEFAULT 0.0"),
+            ("player_results", "tot_ayu INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "id_jug TEXT NOT NULL DEFAULT ''"),
+            ("moves",          "id_ses TEXT NOT NULL DEFAULT ''"),
+            ("moves",          "id_ron INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "tam_tab INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "t_resp_ms INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "racha_aci INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "racha_err INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "sym1_seen_before INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "sym2_seen_before INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "niv_dif INTEGER NOT NULL DEFAULT 0"),
+            ("moves",          "lat_red_ms REAL NOT NULL DEFAULT 0.0"),
+        ]
+        for _tbl, _col_def in _migrations:
+            try:
+                conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN {_col_def}")
+            except sqlite3.OperationalError:
+                pass  # columna ya existe
         conn.commit()
         _DB_CONN = conn
         _log(f"SQLite abierto → {path}")
@@ -99,54 +103,88 @@ def _db() -> sqlite3.Connection:
 
 
 def db_save_round(room_id: str, round_num: int, board_size: int, players: dict,
-                  move_log: list = None):
+                  move_log: list = None, started_at: float = 0.0):
     conn = _db()
-    ended_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+    now            = time.time()
+    ended_at       = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now))
+    started_at_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(started_at)) if started_at else ended_at
+    t_ron_ms       = int((now - started_at) * 1000) if started_at else 0
+    niv_dif        = board_size   # niv_dif ≡ tam_tab en esta implementación
     with _DB_LOCK:
         cur = conn.execute(
-            "INSERT INTO rounds (room_id, round_num, board_size, ended_at) VALUES (?,?,?,?)",
-            (room_id, round_num, board_size, ended_at),
+            "INSERT INTO rounds "
+            "(id_ses, room_id, round_num, tam_tab, board_size, niv_dif, started_at, ended_at, t_ron_ms) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (room_id, room_id, round_num, board_size, board_size, niv_dif,
+             started_at_str, ended_at, t_ron_ms),
         )
         round_id = cur.lastrowid
-        for d in players.values():
-            rt = d["response_times"]
-            avg = round(sum(rt) / len(rt), 3) if rt else 0.0
+        for p_id, d in players.items():
+            rt           = d["response_times"]
+            avg_s        = sum(rt) / len(rt) if rt else 0.0
+            t_resp_ms    = int(avg_s * 1000)          # t_resp_ms: milisegundos (guía)
+            tot_aci      = d["score_this_round"]       # tot_aci (guía)
+            tot_err      = max(0, d["total_moves"] - tot_aci)  # tot_err (guía)
+            tasa_aci     = round(tot_aci / d["total_moves"], 4) if d["total_moves"] else 0.0
+            tasa_err     = round(1.0 - tasa_aci, 4)   # tasa_err (guía)
+            racha_aci    = d.get("racha_aci_max", 0)   # racha_aci: máx aciertos consec. (guía)
+            racha_err    = d.get("racha_err_max", 0)   # racha_err: máx errores consec.  (guía)
+            # rec_par: proporción de aciertos cuando ambos símbolos ya habían sido vistos
+            p_moves      = [m for m in (move_log or []) if m.get("player_name") == d["name"]]
+            both_seen    = [m for m in p_moves
+                            if m.get("sym1_seen_before") and m.get("sym2_seen_before")]
+            rec_par      = round(
+                sum(1 for m in both_seen if m["is_match"]) / len(both_seen), 4
+            ) if both_seen else 0.0
             conn.execute(
                 "INSERT INTO player_results "
-                "(round_id, player_name, score, total_moves, avg_response_time) "
-                "VALUES (?,?,?,?,?)",
-                (round_id, d["name"], d["score_this_round"], d["total_moves"], avg),
+                "(id_ron, id_ses, id_jug, player_name, "
+                " tot_aci, total_moves, t_resp_ms, tot_err, "
+                " tasa_aci, tasa_err, racha_aci, racha_err, rec_par, tot_ayu) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (round_id, room_id, p_id, d["name"],
+                 tot_aci, d["total_moves"], t_resp_ms, tot_err,
+                 tasa_aci, tasa_err, racha_aci, racha_err, rec_par, 0),
             )
         if move_log:
             conn.executemany(
                 "INSERT INTO moves "
-                "(round_id, move_num, player_name, r1, c1, sym1, r2, c2, sym2, "
-                "is_match, response_time_s, matched_before, board_state_json, scores_json, ts) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "(id_ron, id_ses, id_jug, player_name, move_num, "
+                " r1, c1, sym1, r2, c2, sym2, is_match, "
+                " t_resp_ms, matched_before, "
+                " racha_aci, racha_err, sym1_seen_before, sym2_seen_before, "
+                " tam_tab, niv_dif, lat_red_ms, board_state_json, scores_json, ts) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
                     (
-                        round_id, m["move_num"], m["player_name"],
+                        round_id, room_id, m.get("id_jug", ""), m["player_name"],
+                        m["move_num"],
                         m["r1"], m["c1"], m["sym1"],
                         m["r2"], m["c2"], m["sym2"],
                         1 if m["is_match"] else 0,
-                        m["response_time_s"], m["matched_before"],
+                        int(m.get("t_resp_ms", 0)),
+                        m["matched_before"],
+                        m.get("racha_aci", 0), m.get("racha_err", 0),
+                        m.get("sym1_seen_before", 0), m.get("sym2_seen_before", 0),
+                        m.get("tam_tab", board_size), m.get("niv_dif", board_size),
+                        m.get("lat_red_ms", 0.0),
                         m["board_state_json"], m["scores_json"], m["ts"],
                     )
                     for m in move_log
                 ],
             )
         conn.commit()
-    _log(f"Ronda {round_num} guardada en SQLite — {len(move_log or [])} movs (room={room_id})")
+    _log(f"Ronda {round_num} guardada — {len(move_log or [])} movs, t_ron={t_ron_ms}ms (room={room_id})")
 
 
 def db_get_ranking(limit: int = 20) -> list:
     conn = _db()
     rows = conn.execute("""
         SELECT player_name,
-               SUM(score)                AS total_score,
-               COUNT(*)                  AS rounds_played,
-               SUM(total_moves)          AS total_moves,
-               AVG(avg_response_time)    AS avg_rt
+               SUM(tot_aci)                       AS total_score,
+               COUNT(*)                           AS rounds_played,
+               SUM(total_moves)                   AS total_moves,
+               CAST(AVG(t_resp_ms) AS REAL)        AS avg_rt
         FROM   player_results
         GROUP  BY player_name
         ORDER  BY total_score DESC
@@ -173,9 +211,11 @@ class GameRoom:
         self.host_id    = None      # primer jugador en unirse
         self.max_players = 2        # configurable por el host
         self.configured  = False
-        self.pending_first = {}    # player_id -> (r, c) first-card selection
-        self._move_log  = []       # list of move dicts for AI training
-        self._move_num  = 0        # sequential move counter within round
+        self.pending_first = {}         # player_id -> (r, c) first-card selection
+        self._move_log  = []            # list of move dicts for AI training
+        self._move_num  = 0             # sequential move counter within round
+        self.round_started_at = 0.0     # epoch time when current round started (t_ron_ms)
+        self._seen_symbols_round = set()  # símbolos revelados en la ronda actual (rec_par)
         self.lock       = threading.Lock()
         self.cv         = threading.Condition(self.lock)
         self._init_board()
@@ -229,12 +269,17 @@ class GameRoom:
     def add_player(self, name: str) -> str:
         p_id = f"P-{uuid.uuid4().hex[:4].upper()}"
         self.players[p_id] = {
-            "name":            name,
-            "score":           0,    # acumulado total (todas las rondas)
-            "score_this_round": 0,   # solo ronda actual (para guardar en DB)
-            "total_moves":     0,
-            "response_times":  [],
-            "turn_started_at": 0,
+            "id_jug":           p_id,  # id_jug: identificador anónimo del jugador (guía)
+            "name":             name,
+            "score":            0,     # acumulado total (todas las rondas)
+            "score_this_round": 0,     # tot_aci de la ronda actual (para guardar en DB)
+            "total_moves":      0,
+            "response_times":   [],    # lista de t_resp_s por movimiento
+            "turn_started_at":  0,
+            "racha_aci_actual": 0,     # racha_aci corriente en este turno
+            "racha_err_actual": 0,     # racha_err corriente en este turno
+            "racha_aci_max":    0,     # racha_aci máxima de la ronda (→ DB racha_aci)
+            "racha_err_max":    0,     # racha_err máxima de la ronda (→ DB racha_err)
         }
         self.turn_order.append(p_id)
         if not self.host_id:
@@ -253,8 +298,14 @@ class GameRoom:
         self.pending_first.clear()
         self._move_log = []
         self._move_num = 0
+        self._seen_symbols_round = set()
+        self.round_started_at = time.time()
         for d in self.players.values():
-            d["score_this_round"] = 0
+            d["score_this_round"]  = 0
+            d["racha_aci_actual"]  = 0
+            d["racha_err_actual"]  = 0
+            d["racha_aci_max"]     = 0
+            d["racha_err_max"]     = 0
         self.current_turn_idx = (self.round - 1) % len(self.turn_order)  # rota quien empieza
         self.players[self.turn_order[self.current_turn_idx]]["turn_started_at"] = time.time()
         _log(f"Ronda {self.round}/{self.max_rounds} iniciada.", self.room_id)
@@ -310,7 +361,7 @@ class GameRoom:
             self.cv.notify_all()
             return True, "ok"
     # ── Jugada ─────────────────────────────────────────────────────
-    def play_turn(self, p_id, r1, c1, r2, c2) -> memory_pb2.MoveReply:
+    def play_turn(self, p_id, r1, c1, r2, c2, lat_red_ms: float = 0.0) -> memory_pb2.MoveReply:
         with self.lock:
             if self.status != "PLAYING":
                 return memory_pb2.MoveReply(valid=False, message="La partida no está en curso.")
@@ -341,7 +392,9 @@ class GameRoom:
                 player["response_times"].append(rt)
 
             # ── Snapshot para entrenamiento de IA (antes de voltear c2) ──
-            matched_before = sum(1 for row in self.board for cell in row if cell["matched"])
+            matched_before   = sum(1 for row in self.board for cell in row if cell["matched"])
+            sym1_seen_before = 1 if c1_obj["symbol"] in self._seen_symbols_round else 0
+            sym2_seen_before = 1 if c2_obj["symbol"] in self._seen_symbols_round else 0
             board_snap = [
                 self.board[rr][cc]["symbol"]
                 if (self.board[rr][cc]["matched"] or self.board[rr][cc]["flipped"])
@@ -356,15 +409,36 @@ class GameRoom:
 
             is_match = c1_obj["symbol"] == c2_obj["symbol"]
 
-            # ── Registrar movimiento ───────────────────────────────────
+            # ── Actualizar rachas y símbolos vistos ────────────────────
+            if is_match:
+                player["racha_aci_actual"] += 1
+                player["racha_err_actual"]  = 0
+            else:
+                player["racha_err_actual"] += 1
+                player["racha_aci_actual"]  = 0
+            player["racha_aci_max"] = max(player["racha_aci_max"], player["racha_aci_actual"])
+            player["racha_err_max"] = max(player["racha_err_max"], player["racha_err_actual"])
+            self._seen_symbols_round.add(c1_obj["symbol"])
+            self._seen_symbols_round.add(c2_obj["symbol"])
+
+            # ── Registrar movimiento (nivel de evento — guía sección 5.1) ───
             self._move_log.append({
+                "id_jug":           p_id,                      # id_jug (guía)
                 "move_num":         self._move_num,
                 "player_name":      player["name"],
+                "id_ses":           self.room_id,              # id_ses (guía)
                 "r1": r1, "c1": c1, "sym1": c1_obj["symbol"],
                 "r2": r2, "c2": c2, "sym2": c2_obj["symbol"],
                 "is_match":         is_match,
-                "response_time_s":  round(rt, 4),
+                "t_resp_ms":        int(rt * 1000),            # t_resp_ms en ms (guía)
                 "matched_before":   matched_before,
+                "racha_aci":        player["racha_aci_actual"], # racha_aci (guía)
+                "racha_err":        player["racha_err_actual"], # racha_err (guía)
+                "sym1_seen_before": sym1_seen_before,          # insumo para rec_par
+                "sym2_seen_before": sym2_seen_before,
+                "tam_tab":          self.size,                  # tam_tab (guía)
+                "niv_dif":          self.size,                  # niv_dif (guía)
+                "lat_red_ms":       round(lat_red_ms, 3),       # lat_red_ms (guía)
                 "board_state_json": json.dumps(board_snap, ensure_ascii=False),
                 "scores_json":      json.dumps(
                     {d["name"]: d["score"] for d in self.players.values()},
@@ -409,7 +483,7 @@ class GameRoom:
                 move_log_snap = list(self._move_log)
                 threading.Thread(
                     target=db_save_round,
-                    args=(self.room_id, rnd, self.size, players_snap, move_log_snap),
+                    args=(self.room_id, rnd, self.size, players_snap, move_log_snap, self.round_started_at),
                     daemon=True,
                 ).start()
 
@@ -570,6 +644,7 @@ class MemoryGameServicer(memory_pb2_grpc.MemoryGameServicer):
             request.player_id,
             request.r1, request.c1,
             request.r2, request.c2,
+            request.lat_red_ms,
         )
 
     # ── gRPC: GetStatistics ───────────────────────────────────────

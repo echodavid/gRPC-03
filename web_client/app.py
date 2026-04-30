@@ -3,6 +3,7 @@ import grpc
 import sys
 import os
 import json
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'client'))
 import memory_pb2
@@ -49,10 +50,37 @@ def join():
             'player_id': resp.player_id,
             'board_size': resp.board_size,
             'room_id': resp.room_id,
+            'is_host': resp.is_host,
         })
     except grpc.RpcError as e:
         return jsonify({'error': e.details()}), 502
     except (ValueError, TypeError) as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/configure', methods=['POST'])
+def configure():
+    data = request.get_json(silent=True) or {}
+    host = str(data.get('host', 'localhost'))
+    try:
+        port        = _validate_port(data.get('port', 50054))
+        player_id   = str(data['player_id'])
+        board_size  = int(data.get('board_size', 4))
+        max_players = int(data.get('max_players', 2))
+        max_rounds  = int(data.get('max_rounds', 3))
+        stub = _stub(host, port)
+        resp = stub.ConfigureGame(
+            memory_pb2.ConfigRequest(
+                player_id=player_id,
+                board_size=board_size,
+                max_players=max_players,
+                max_rounds=max_rounds,
+            ), timeout=5
+        )
+        return jsonify({'valid': resp.valid, 'message': resp.message})
+    except grpc.RpcError as e:
+        return jsonify({'error': e.details()}), 502
+    except (ValueError, KeyError, TypeError) as e:
         return jsonify({'error': str(e)}), 400
 
 
@@ -85,10 +113,12 @@ def play():
         player_id = str(data['player_id'])
         r1, c1 = int(data['r1']), int(data['c1'])
         r2, c2 = int(data['r2']), int(data['c2'])
+        client_ts  = data.get('client_ts')   # epoch ms enviado por el browser
+        lat_red_ms = float(int(time.time() * 1000) - int(client_ts)) if client_ts else 0.0
 
         stub = _stub(host, port)
         resp = stub.PlayTurn(memory_pb2.MoveRequest(
-            player_id=player_id, r1=r1, c1=c1, r2=r2, c2=c2
+            player_id=player_id, r1=r1, c1=c1, r2=r2, c2=c2, lat_red_ms=lat_red_ms
         ), timeout=10)
         return jsonify({'valid': resp.valid, 'message': resp.message, 'match': resp.match})
     except grpc.RpcError as e:
@@ -128,6 +158,11 @@ def stream():
                     'status': game_state.status,
                     'scores': dict(game_state.scores),
                     'room_id': game_state.room_id,
+                    'round': game_state.round,
+                    'max_rounds': game_state.max_rounds,
+                    'host_id': game_state.host_id,
+                    'max_players': game_state.max_players,
+                    'board_size': game_state.board_size,
                 }
                 yield f"data: {json.dumps(payload)}\n\n"
         except grpc.RpcError as e:
@@ -196,7 +231,8 @@ def rooms():
         stub = _stub(host, port)
         resp = stub.ListRooms(memory_pb2.Empty(), timeout=5)
         return jsonify({'rooms': [
-            {'room_id': r.room_id, 'status': r.status, 'player_count': r.player_count}
+            {'room_id': r.room_id, 'status': r.status,
+             'player_count': r.player_count, 'max_players': r.max_players}
             for r in resp.rooms
         ]})
     except grpc.RpcError as e:
